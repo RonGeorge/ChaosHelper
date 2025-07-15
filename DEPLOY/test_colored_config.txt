@@ -1,0 +1,8 @@
+LAYOUT: test_colored_layout.layout
+
+// Config file for testing ColoredButton layout
+// Note: Colors are now defined in the .layout file, not here!
+// This config just maps any overrides for the controls
+
+// All colored buttons are defined in the layout file
+// No color specifications needed here anymore

@@ -2,6 +2,7 @@
 using System.IO;
 using System.Collections.Generic;
 using System.Collections;
+using System.Linq;
 
 using Decal.Adapter;
 using Decal.Adapter.Wrappers;
@@ -401,7 +402,56 @@ namespace ChaosHelper
                         // lets see what we have...
                         IChaosHudControl newMainControl = null;//only track main form control; when we register later we will use .Mirror
 
-                        if (directive.IndexOf("ToggleButton", StringComparison.InvariantCultureIgnoreCase) != -1)//must check before regular Button
+                        if (directive.IndexOf("ColoredButton", StringComparison.InvariantCultureIgnoreCase) != -1)
+                        {
+                            string colorSpec = null;
+                            string defText = null;
+                            string defCommand = null;
+                            string defParam = null;
+
+                            if (datCols.Count >= 3)
+                            {
+                                colorSpec = datCols[0];
+                                defText = datCols[1];
+                                defCommand = datCols[2];
+                            }
+
+                            if (datCols.Count >= 4)
+                                defParam = datCols[3];
+
+                            if (string.IsNullOrEmpty(defText))
+                                defText = currentTab + "_" + button_count.ToString("D2");
+
+                            if (!string.IsNullOrEmpty(colorSpec) && IsColorSpecification(colorSpec))
+                            {
+                                // Create colored button
+                                Color buttonColor = ParseColor(colorSpec);
+                                ChaosHudColoredButton tempBtn = new ChaosHudColoredButton(defText, defCommand, defParam, buttonColor);
+                                ChaosHudColoredButton tempPopBtn = new ChaosHudColoredButton(defText, defCommand, defParam, buttonColor);
+                                tempBtn.MirrorButton = tempPopBtn;
+                                tempPopBtn.MirrorButton = tempBtn;
+
+                                tempBtn.InternalName = currentTab + "_ColoredButton_" + button_count.ToString("D2");
+                                tempPopBtn.InternalName = currentTab + "_ColoredButton_" + button_count.ToString("D2");
+
+                                newMainControl = tempBtn;
+                            }
+                            else
+                            {
+                                // Fallback to standard button if color invalid
+                                ChaosHudButton tempBtn = new ChaosHudButton(defText, defCommand, defParam);
+                                ChaosHudButton tempPopBtn = new ChaosHudButton(defText, defCommand, defParam);
+                                tempBtn.MirrorButton = tempPopBtn;
+                                tempPopBtn.MirrorButton = tempBtn;
+
+                                tempBtn.InternalName = currentTab + "_ColoredButton_" + button_count.ToString("D2");
+                                tempPopBtn.InternalName = currentTab + "_ColoredButton_" + button_count.ToString("D2");
+
+                                newMainControl = tempBtn;
+                            }
+
+                        }
+                        else if (directive.IndexOf("ToggleButton", StringComparison.InvariantCultureIgnoreCase) != -1)//must check before regular Button
                         {
                             string defTextOff = null;
                             string defTextOn = null;
@@ -805,7 +855,50 @@ namespace ChaosHelper
 
                                     }
                                 }
-                            } else if (ctrl is ChaosHudStaticText)
+                            }
+                            else if (ctrl is ChaosHudColoredButton)
+                            {
+                                ChaosHudColoredButton temp = (ChaosHudColoredButton)ctrl;
+
+                                string currentTabName = ctrlName.Substring(0, ctrlName.IndexOf('_'));
+                                //check if button exists
+                                if (temp != null)
+                                {
+                                    //Check if button should be set to visible
+                                    if (col[1].Contains("NOTSET"))
+                                    {
+                                        temp.Visible = false;
+                                        temp.Mirror.Visible = false;
+                                    }
+                                    // Register the button event handler and make visible
+                                    else
+                                    {
+                                        temp.Text = col[1];
+                                        temp.Mirror.Text = col[1];
+
+                                        temp.Visible = true;
+                                        temp.Mirror.Visible = true;
+
+                                        //Creates the event handler for each button
+                                        string strCommand = null;
+                                        if (col.Length > 2)
+                                            strCommand = col[2];
+
+                                        string strParam = null;
+                                        if (col.Length > 3)
+                                            strParam = col[3];
+
+                                        // override command for main form
+                                        temp.Command = strCommand;
+                                        temp.Param = strParam;
+
+                                        // override command for popup form
+                                        temp.MirrorButton.Command = strCommand;
+                                        temp.MirrorButton.Param = strParam;
+                                    }
+                                }
+                            }
+                            else if (ctrl is ChaosHudStaticText)
                             {
                                 ChaosHudStaticText temp = (ChaosHudStaticText)ctrl;
 
@@ -1131,6 +1224,64 @@ namespace ChaosHelper
 
             if (!Decal_DispatchOnChatCommand(cmd))
                 CoreManager.Current.Actions.InvokeChatParser(cmd);
+        }
+
+        private bool IsColorSpecification(string value)
+        {
+            return IsColorName(value) || IsHexColor(value);
+        }
+
+        private bool IsColorName(string value)
+        {
+            string[] validColors = { "red", "blue", "green", "yellow", "orange", "purple", 
+                                    "black", "white", "gray", "brown", "pink", "cyan", "magenta" };
+            return validColors.Contains(value.ToLower());
+        }
+
+        private bool IsHexColor(string value)
+        {
+            return value.Length == 6 && value.All(c => "0123456789ABCDEFabcdef".Contains(c));
+        }
+
+        private Color ParseColor(string colorSpec)
+        {
+            try
+            {
+                if (IsHexColor(colorSpec))
+                {
+                    // Parse hex: "FF0000" -> Color.Red
+                    int r = Convert.ToInt32(colorSpec.Substring(0, 2), 16);
+                    int g = Convert.ToInt32(colorSpec.Substring(2, 2), 16);
+                    int b = Convert.ToInt32(colorSpec.Substring(4, 2), 16);
+                    return Color.FromArgb(r, g, b);
+                }
+                else
+                {
+                    // Parse color names
+                    switch (colorSpec.ToLower())
+                    {
+                        case "red": return Color.Red;
+                        case "blue": return Color.Blue;
+                        case "green": return Color.Green;
+                        case "yellow": return Color.Yellow;
+                        case "orange": return Color.Orange;
+                        case "purple": return Color.Purple;
+                        case "black": return Color.Black;
+                        case "white": return Color.White;
+                        case "gray": return Color.Gray;
+                        case "brown": return Color.Brown;
+                        case "pink": return Color.Pink;
+                        case "cyan": return Color.Cyan;
+                        case "magenta": return Color.Magenta;
+                        default: return Color.LightGray; // Fallback
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Util.LogError(ex);
+                return Color.LightGray; // Safe fallback
+            }
         }
 
         public static Bitmap MergeTwoImages(Image firstImage, Image secondImage)

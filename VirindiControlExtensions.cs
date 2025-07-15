@@ -128,6 +128,113 @@ namespace ChaosHelper
             }
         }
 
+        public class ChaosHudColoredButton : HudControl, IChaosHudControl
+        {
+            public HudControl AsHudControl { get { return this; } }
+            public string Command;
+            public string Param;
+            public Color BackgroundColor;
+
+            public ChaosHudColoredButton MirrorButton = null;
+            public IChaosHudControl Mirror { get { return MirrorButton; } }
+
+            private string _Text = string.Empty;
+            public string Text 
+            { 
+                get { return _Text; } 
+                set 
+                { 
+                    _Text = value; 
+                    Invalidate(); 
+                } 
+            }
+
+            protected bool MouseButtonDown = false;
+            protected bool MouseButtonDownInRect = false;
+
+            public ChaosHudColoredButton(string _Text, string _Command, string _Param, Color backgroundColor)
+            {
+                Text = _Text;
+                Command = _Command;
+                Param = _Param;
+                BackgroundColor = backgroundColor;
+
+                Hit += ChaosHudColoredButton_Hit;
+            }
+
+            private void ChaosHudColoredButton_Hit(object sender, EventArgs e)
+            {
+                PluginCore.DispatchCommand(Command, Param);
+            }
+
+
+            public override void MouseDown(Point pt)
+            {
+                base.MouseDown(pt);
+
+                if (!OnScreenNow)
+                    return;
+
+                MouseButtonDown = true;
+                MouseButtonDownInRect = true;
+
+                Invalidate();
+            }
+
+            public override void MouseUp(Point pt, Point orig)
+            {
+                base.MouseUp(pt, orig);
+
+                if (!OnScreenNow)
+                    return;
+
+                MouseButtonDown = false;
+
+                Invalidate();
+            }
+
+            public override void MouseMove(Point pt)
+            {
+                base.MouseMove(pt);
+
+                if (!MouseButtonDown)
+                    return;
+
+                bool inside = ClipRegion.Contains(pt);
+
+                if(inside != MouseButtonDownInRect)
+                {
+                    MouseButtonDownInRect = inside;
+                    Invalidate();
+                }
+            }
+
+            public override void DrawNow(DxTexture iSavedTarget)
+            {
+                if (!this.CanDraw || !this.Visible)
+                    return;
+
+                base.DrawNow(iSavedTarget);
+                
+                if (ClipRegion.Size.Width <= 4 || ClipRegion.Size.Height <= 4)
+                    return;
+
+                // Fill with the custom background color
+                iSavedTarget.Fill(ClipRegion, BackgroundColor);
+
+                // Draw button borders
+                Theme.FloodFill(iSavedTarget, "ButtonHighlight", new Rectangle(ClipRegion.Left, ClipRegion.Top, 1, ClipRegion.Height));
+                Theme.FloodFill(iSavedTarget, "ButtonHighlight", new Rectangle(ClipRegion.Left, ClipRegion.Top, ClipRegion.Width, 1));
+                Theme.FloodFill(iSavedTarget, "ButtonShadow", new Rectangle(ClipRegion.Left, ClipRegion.Bottom - 1, ClipRegion.Width, 1));
+                Theme.FloodFill(iSavedTarget, "ButtonShadow", new Rectangle(ClipRegion.Right - 1, ClipRegion.Top, 1, ClipRegion.Height));
+
+                // Draw text on top
+                iSavedTarget.BeginText(Theme.GetVal<string>("DefaultTextFontFace"), (float)Theme.GetVal<int>("DefaultTextFontSize"), Theme.GetVal<int>("DefaultTextFontWeight"), false, Theme.GetVal<int>("DefaultTextFontShadowSize"), Theme.GetVal<int>("DefaultTextFontShadowAlpha"));
+                iSavedTarget.WriteText(Text, Theme.GetColor("ButtonText"), Theme.GetVal<Color>("DefaultTextFontShadowColor"), WriteTextFormats.Center | WriteTextFormats.VerticalCenter, ClipRegion);
+                iSavedTarget.EndText();
+            }
+        }
+
         // custom "toggleable" button..   works like a checkbox but looks like a button.
         // the drawing code was derived from a .NET decompilation of HudButton
         public class ChaosHudToggleButton : HudControl, IChaosHudControl
